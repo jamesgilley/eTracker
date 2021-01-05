@@ -193,3 +193,138 @@ const insertEmployees = async(employees) => {
         console.log('inserted employee', i);
     }
 }
+const insertRoles = async(roles) => {
+    for (let i = 0; i < roles.length; i++) {
+        const role = roles[i];
+        var sql = "INSERT INTO roles ( title, salary, departmentId) VALUES ( ?, ?, ?)";
+        const { roleTitle, roleSalary, role_department_id } = role;
+        const args = [roleTitle, roleSalary, role_department_id]
+        await sqlQuery(sql, args)
+        console.log('inserted role', i);
+    }
+}
+
+const insertDepartments = async(departments) => {
+    for (let i = 0; i < departments.length; i++) {
+        const department = departments[i];
+        var sql = "INSERT INTO departments ( name) VALUES ( ?)";
+        const { departmentName } = department;
+        const args = [departmentName]
+        await sqlQuery(sql, args)
+        console.log('inserted department', i);
+    }
+}
+
+const main = async() => {
+    //await resetDatabase();
+
+    const operationResponse = await promptOperationType();
+    console.log('operationResponse', operationResponse);
+
+    if (operationResponse.operationType == "Add Employee Data") {
+
+        const quantityResponse = await promptQuantity();
+        console.log('quantityResponse', quantityResponse);
+
+        const employeesResponse = await promptEmployees(quantityResponse.numEmployees);
+        await insertEmployees(employeesResponse);
+        console.log('inserted', employeesResponse.length, 'employees');
+        localStorage.set('employeesResponse', employeesResponse);
+        //console.log('employeesResponse:')
+        //console.log(employeesResponse)
+
+        const rolesResponse = await promptRoles(quantityResponse.numRoles);
+        await insertRoles(rolesResponse);
+        console.log('inserted', rolesResponse.length, 'roles');
+        localStorage.set('rolesResponse', rolesResponse);
+        /* console.log('rolesResponse:')
+        console.log(rolesResponse) */
+
+        const departmentsResponse = await promptDepartments(quantityResponse.numDepartments);
+        await insertDepartments(departmentsResponse);
+        console.log('inserted', departmentsResponse.length, 'departments');
+        localStorage.set('departmentsResponse', departmentsResponse);
+        /* console.log('departmentsResponse:')
+        console.log(departmentsResponse) */
+    } else if (operationResponse.operationType == "Delete All Employee Data") {
+        await sqlQuery('delete from employees')
+        await sqlQuery('delete from roles')
+        await sqlQuery('delete from departments')
+            //resetDatabase();
+        console.log('All Employee Data Deleted')
+    } else if (operationResponse.operationType == "View All Employee Data") {
+        console.log('Employee, Role, and Department Data to View:')
+
+        let employeesData = await sqlQuery('select * from employees')
+        console.table(employeesData)
+        let rolesData = await sqlQuery('select * from roles')
+        console.table(rolesData)
+        let departmentsData = await sqlQuery('select * from departments')
+        console.table(departmentsData)
+
+
+        console.log('All Employee, Role, and Department Data Viewed')
+    } else if (operationResponse.operationType == "Update Any Employee Data") {
+        console.log('update all data called')
+        const data = await promptUpdateTable();
+        console.log(data)
+        if (data.updateTable == 'Employees') {
+            const employeeData = (await promptEmployees(1))[0]
+            console.log(employeeData)
+            await sqlQuery('update employees SET first_name=?, last_name=?, role_id=?, manager_id=? where id=?', [employeeData.employeeFirstName, employeeData.employeeLastName, employeeData.role_id, employeeData.manager_id, data.updateId])
+
+        } else if (data.updateTable == 'Roles') {
+            const roleData = (await promptRoles(1))[0]
+            console.log(roleData)
+            await sqlQuery('update roles SET title=?, salary=?, departmentId=? where id=?', [roleData.roleTitle, roleData.roleSalary, roleData.role_department_id, data.updateId])
+        } else if (data.updateTable == 'Departments') {
+            const departmentData = (await promptDepartments(1))[0]
+            console.log(departmentData)
+            await sqlQuery('update departments SET name=? where id=?', [departmentData.departmentName, data.updateId])
+
+        }
+
+        //const updateType = await promptUpdateType();
+        //console.log('updateType', updateType);
+        //promptUpdateType();
+    }
+
+}
+
+
+
+const sqlQuery = (sql, args) => {
+    return new Promise((resolve, reject) => {
+        con.query(sql, args, function(err, result) {
+            if (err) {
+                return reject(err);
+            }
+            resolve(result)
+        })
+    })
+}
+
+
+const resetDatabase = async() => {
+    var sql = "DROP TABLE employees"
+    await sqlQuery(sql);
+    console.log("employee Table dropped");
+
+    var sql = "CREATE TABLE employees (first_name VARCHAR(30), last_name VARCHAR(30), id INT AUTO_INCREMENT PRIMARY KEY, role_id INT, manager_id INT)";
+    await sqlQuery(sql);
+    console.log("employee Table created");
+    var sql = "DROP TABLE roles"
+    await sqlQuery(sql);
+    console.log("roles Table dropped");
+    var sql = "CREATE TABLE roles (id INT AUTO_INCREMENT PRIMARY KEY, title VARCHAR(30), salary DECIMAL, departmentId INT)";
+    await sqlQuery(sql);
+    console.log("Role Table created");
+    var sql = "DROP TABLE departments"
+    await sqlQuery(sql);
+    console.log("departments Table dropped");
+    var sql = "CREATE TABLE departments (id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(30))";
+    await sqlQuery(sql);
+    console.log("Department Table created");
+}
+
+main();
