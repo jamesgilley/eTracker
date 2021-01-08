@@ -10,15 +10,32 @@ var localStorage = require('local-storage');
 console.log(localStorage.get('foo'));
 //bar */
 
-
 const writeFileAsync = util.promisify(fs.writeFile);
 
-var con = mysql.createConnection({
-    host: "localhost",
-    user: "root",
-    password: "password",
-    database: "mydb"
-});
+let con
+const connectToDb = async(database) => {
+    const options = {
+        host: "localhost",
+        user: "root",
+        password: "password",
+        database
+    }
+    try {
+        con = mysql.createConnection(options)
+        await sqlQuery('show tables')
+    } catch (ex) {
+        if (ex.errno === 1049) {
+            options.database = 'sys'
+            console.log('connecting to sys')
+            con = mysql.createConnection(options)
+            console.log('creating db ', database)
+            await sqlQuery(`create database ${database}`)
+            options.database = database
+            console.log('connecting to ', database)
+            con = mysql.createConnection(options)
+        }
+    }
+}
 
 class Employee {
     constructor(first_name, id, last_name, role_id, manager_id) { // Class Constructor 
@@ -193,6 +210,7 @@ const insertEmployees = async(employees) => {
         console.log('inserted employee', i);
     }
 }
+
 const insertRoles = async(roles) => {
     for (let i = 0; i < roles.length; i++) {
         const role = roles[i];
@@ -215,8 +233,11 @@ const insertDepartments = async(departments) => {
     }
 }
 
-const main = async() => {
-    //await resetDatabase();
+const main = async(doesReset) => {
+    await connectToDb('mydb')
+    if (doesReset) {
+        await resetDatabase();
+    }
 
     const operationResponse = await promptOperationType();
     console.log('operationResponse', operationResponse);
@@ -246,12 +267,14 @@ const main = async() => {
         localStorage.set('departmentsResponse', departmentsResponse);
         /* console.log('departmentsResponse:')
         console.log(departmentsResponse) */
+        main(false);
     } else if (operationResponse.operationType == "Delete All Employee Data") {
         await sqlQuery('delete from employees')
         await sqlQuery('delete from roles')
         await sqlQuery('delete from departments')
             //resetDatabase();
         console.log('All Employee Data Deleted')
+        main(false);
     } else if (operationResponse.operationType == "View All Employee Data") {
         console.log('Employee, Role, and Department Data to View:')
 
@@ -264,6 +287,7 @@ const main = async() => {
 
 
         console.log('All Employee, Role, and Department Data Viewed')
+        main(false);
     } else if (operationResponse.operationType == "Update Any Employee Data") {
         console.log('update all data called')
         const data = await promptUpdateTable();
@@ -284,9 +308,7 @@ const main = async() => {
 
         }
 
-        //const updateType = await promptUpdateType();
-        //console.log('updateType', updateType);
-        //promptUpdateType();
+        main(false);
     }
 
 }
@@ -306,25 +328,43 @@ const sqlQuery = (sql, args) => {
 
 
 const resetDatabase = async() => {
-    var sql = "DROP TABLE employees"
-    await sqlQuery(sql);
-    console.log("employee Table dropped");
+    const existsDB = await sqlQuery("show databases like 'mydb'");
+    if (!existsDB.length) {
+        await sqlQuery("create database mydb")
+    }
+
+    const existsEmployees = await sqlQuery("show tables from mydb like 'employees'")
+    if (existsEmployees.length > 0) {
+        var sql = "DROP TABLE employees"
+        await sqlQuery(sql);
+        console.log("employee Table dropped");
+    }
 
     var sql = "CREATE TABLE employees (first_name VARCHAR(30), last_name VARCHAR(30), id INT AUTO_INCREMENT PRIMARY KEY, role_id INT, manager_id INT)";
     await sqlQuery(sql);
     console.log("employee Table created");
-    var sql = "DROP TABLE roles"
-    await sqlQuery(sql);
-    console.log("roles Table dropped");
+
+    const existsRoles = await sqlQuery("show tables from mydb like 'roles'")
+    if (existsRoles.length > 0) {
+        var sql = "DROP TABLE roles"
+        await sqlQuery(sql);
+        console.log("roles Table dropped");
+    }
+
     var sql = "CREATE TABLE roles (id INT AUTO_INCREMENT PRIMARY KEY, title VARCHAR(30), salary DECIMAL, departmentId INT)";
     await sqlQuery(sql);
     console.log("Role Table created");
-    var sql = "DROP TABLE departments"
-    await sqlQuery(sql);
-    console.log("departments Table dropped");
+
+    const existsDepartments = await sqlQuery("show tables from mydb like 'departments'")
+    if (existsDepartments.length > 0) {
+        var sql = "DROP TABLE departments"
+        await sqlQuery(sql);
+        console.log("departments Table dropped");
+    }
     var sql = "CREATE TABLE departments (id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(30))";
     await sqlQuery(sql);
     console.log("Department Table created");
 }
 
-main();
+// we only want to reset the database, when we first run the app
+main(true);
